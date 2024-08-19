@@ -1,2 +1,0 @@
-
-#include "Apfelmann.h"
