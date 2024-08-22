@@ -29,11 +29,16 @@ namespace myA {
 		int* biskomponente;
 
 		// Vorauswahl
-		int auswahl = 4;
-		//int auswahl = 5;
-		unsigned int second = 0;
+		//int auswahl = 4;
+		int auswahl = 5;
+		//int auswahl = 6;
+		//int auswahl = 7;
+		//unsigned int second = 0;
+		//unsigned int second = 1;
+		unsigned int second = 2;
 		// Rechentiefe wird bei 'second=1' halbiert
 		// also Hilfsvariable benutzen
+		// in C++ ist das jetzt sehr zeitintensiv mit second = 0 und schneetiefe = 8
 		unsigned int realetiefe = 0;
 		unsigned int* dim;
 
@@ -43,9 +48,14 @@ namespace myA {
 
 		// Apfelmann
 		const unsigned int apfelbreite = 575;
-		const unsigned int apfelhoehe = 425;
-		const unsigned int iend = 2 * apfelbreite;
-		const unsigned int jend = 2 * apfelhoehe;
+		const unsigned int apfelhoehe = 450;
+		const int iend = 2 * apfelbreite;
+		const int jend = 2 * apfelhoehe;
+		int* punktfarbe = new int[(iend + 1) * (jend + 1)];
+		std::vector<sf::Color> acolor;
+		std::vector<sf::Color> arcolor;
+		std::vector<sf::Color> agcolor;
+		std::vector<sf::Color> abcolor;
 		double rzf = 0;
 		double izf = 0;
 		double qrzf = 0;
@@ -65,38 +75,38 @@ namespace myA {
 		unsigned int farbe = 0;
 		unsigned int rausbei = 0;
 		const unsigned int maxfarbe = 4;
-		// das muss ich noch übersetzen
-		//->Color[] acolor, arcolor, agcolor, abcolor;
 		int ineu = -1;
 		int jneu = -1;
 		// 'neuoderalt' regelt was gerade gemalt werden soll
 		// 0=altes nochmal - 1=nochmal das gleiche - 2=neue werte nehmen
 		// 3=original-apfelmann zeichnen
 		int neuoderalt = 3;
+		//const unsigned int exponent = 2;
+		const unsigned int exponent = 3;
 		unsigned int schwarzgrenze = 200;
 		const unsigned int zoom = 6;
+		//char modus = 'P';
 		char modus = 'R';
-		const unsigned int apfelxabstand = 200;
-		const unsigned int apfelyabstand = 60;
+		const unsigned int apfelxabstand = 250;
+		const unsigned int apfelyabstand = 30;
 		// 'grenzqradius' ist der Radius des Kreises,
 		// den die Punkte verlassen oder auch nicht,
 		// zum Quadrat genommen
 		double grenzqradius = 100;
-		std::vector<std::vector<int>> punktfarbe;
 		unsigned int lupe = 0;
-		const unsigned int exponent = 2;
 
 		// Dreieckchen
-		const unsigned int dxmitte = 425;
-		const unsigned int dymitte = 250;
-		double faktor;
-		const unsigned int dfarbe = 11;
-		const unsigned int dreitiefe = 8;
-		const unsigned int dreikante = 140;
+		const unsigned int dxmitte = 850;
+		const unsigned int dymitte = 400;
+		//double faktor;
+		//const unsigned int dfarbe = 71;
+		const unsigned int dreitiefe = 16;
+		const unsigned int dreikante = 400;
 
 		// Schneeflocke
 		const unsigned int schneetiefe = 6;
-		const unsigned int schneekante = 150;
+		//const unsigned int schneetiefe = 8;
+		const unsigned int schneekante = 300;
 
 		Config();
 		~Config();

@@ -3,15 +3,18 @@
 
 #include <SFML/Graphics.hpp>
 
-//#include <vector>
+#define _USE_MATH_DEFINES
 #include <cmath>
 #include <cstdlib>
+//#include <vector>
 //#include <iostream>
 
 #include "init.h"
 #include "tools.h"
 // temp
 #include "menu.h"
+
+#define PI 3.14159265359
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 

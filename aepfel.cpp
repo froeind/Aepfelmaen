@@ -18,6 +18,11 @@ int main()
 
 	myA::init(window, &config);
 
+	window.clear();
+	menu.draw();
+
+	bool isDrawn = false;
+
     while (window.isOpen())
     {
         sf::Event event;
@@ -31,9 +36,12 @@ int main()
 
         // ... (Mandelbrot berechnen und zeichnen)
 
-		window.clear();
-		menu.draw();
-		myA::paint(window, &config);
+		if (!isDrawn) {
+			myA::paint(window, &config);
+			menu.draw();
+			window.display();
+			isDrawn = true;
+		}
 
 		/*
 		const unsigned int seite = 500;
@@ -43,7 +51,6 @@ int main()
 
 		//menu.msgBox(std::to_string(config.vonkomponente[4]));
 
-		window.display();
     }
 
 

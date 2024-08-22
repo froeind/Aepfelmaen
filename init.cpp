@@ -12,7 +12,7 @@ myA::Config::~Config() {
 	delete[] vonkomponente;
 	delete[] biskomponente;
 	delete[] dim;
-	//delete punktfarbe;
+	delete punktfarbe;
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
