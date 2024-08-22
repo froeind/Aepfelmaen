@@ -28,6 +28,237 @@ void makePause(sf::RenderWindow& window)
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+void LinieZiehen(sf::RenderWindow& window, myA::Config* config, const unsigned int& aktf, const unsigned int& anf, const unsigned int& end, const unsigned int& zeile)
+{
+	sf::RectangleShape pixelline(sf::Vector2f(1 + end - anf, 1));
+	pixelline.setPosition((float)(anf + config->apfelxabstand), (float)(zeile + config->apfelyabstand));
+	pixelline.setFillColor(sf::Color::Red);
+
+	if (aktf == config->schwarzgrenze)
+	{
+		pixelline.setFillColor(sf::Color::Black);
+	}
+	else
+	{
+		if (config->farbe == 0)
+		{
+			pixelline.setFillColor(config->arcolor.at(aktf));
+		}
+		else if (config->farbe == 1)
+		{
+			pixelline.setFillColor(config->agcolor.at(aktf));
+		}
+		else if (config->farbe == 2)
+		{
+			pixelline.setFillColor(config->abcolor.at(aktf));
+		}
+		else
+		{
+			pixelline.setFillColor(config->acolor.at(aktf));
+		}
+	}
+	window.draw(pixelline);
+
+	// temp
+	/*
+	myA::Menu menu(window);
+	menu.msgBoxBig(std::to_string(anf + config->apfelxabstand)
+		+ "\n" + std::to_string(zeile + config->apfelyabstand)
+		+ "\n" + std::to_string(end + config->apfelxabstand)
+		+ "\n" + std::to_string(zeile + config->apfelyabstand));
+	*/
+	window.display();
+}
+
+void FarbeBestimmen(sf::RenderWindow& window, myA::Config* config, const unsigned int& i, const unsigned int& j, bool malen)
+{
+	// Imaginärteil von c erstellen
+	double ic = config->cimgrenze + j * config->cistep;
+	double rc = config->crmgrenze + i * config->crstep;
+	unsigned int rausbei = 0;
+	double rz = config->rzf;
+	double iz = config->izf;
+	double qrz = config->qrzf;
+	double qiz = config->qizf;
+	double rzh;
+	double izh;
+	do
+	{
+		// neuen Punkt erstellen
+		// und 'rausbei' hochzählen
+		++rausbei;
+		// quadratrischer Exponent wird vorberechnet
+		rzh = qrz - qiz;
+		izh = 2 * rz * iz;
+		// kubischer Exponent explizit
+		//rz = rz*(qrz-3*qiz)+rc;
+		//iz = iz*(3*qrz-qiz)+ic;
+		for (unsigned int ii = 3; ii <= config->exponent; ++ii)
+		{
+			double rzhh = rzh * rz - izh * iz;
+			izh = rzh * iz + izh * rz;
+			rzh = rzhh;
+		}
+		rz = rzh + rc;
+		iz = izh + ic;
+		qrz = rz * rz;
+		qiz = iz * iz;
+	} while ((rausbei < config->schwarzgrenze) && (qrz + qiz < config->grenzqradius));
+
+	if ((rausbei > config->schwarzgrenze - 5) && (rausbei < config->schwarzgrenze))
+	{
+		if ((1. * rand() / RAND_MAX > 0.9) && (config->lupe < 10))
+		{
+			config->ineu = i;
+			config->jneu = j;
+			++config->lupe;
+		}
+	}
+
+	// im Punkt- und Randmodus werden die Pixel gesetzt
+	// aber nicht beim Suchen im Randmodus
+	if (malen) LinieZiehen(window, config, rausbei, i, i, j);
+
+	// für den Randmodus zusätzlich der Arraywert
+	config->punktfarbe[config->iend * j + i] = rausbei;
+}
+
+void SuchePunkte(sf::RenderWindow& window, myA::Config* config, const int& akti, const int& aktj, const unsigned int& aktf, const int& jrand)
+{
+	int pfn;
+
+	int spi = akti;
+	int spj = aktj;
+	int spr = 0;
+	bool abbruch = false;
+
+	while ((!abbruch) || (akti != spi) || (aktj != spj))
+	{
+		// kein Abbruch am Anfang, da ja der Startpunkt der Ausgangspunkt ist
+		// und ein Abbruch erst beim Eintreffen in Startpunkt stattfindet
+		abbruch = true;
+
+		// nächste Richtung, ausgehend von gültigem Punkt,
+		// in der neuer Punkt gesucht wird
+		int sprn = (spr + 1) % 4;
+
+		// nächster Punkt in dieser Richtung
+		int spin = spi - ((sprn - 1) % 2);
+		int spjn = spj - ((sprn - 2) % 2);
+
+		// neue Richtung für Weitersuche in gültigem Punkt
+		// aber ausgehend von einem ungültigen Punkt
+		// aus dieser wird dann die neue Richtung gegen Uhrzeigersinn
+		int spru = (sprn + 2) % 4;
+
+		if ((spin < 0) || (spin > config->iend) || (spjn < jrand) || (spjn > config->jend))
+		{
+			// neuer Punkt ist außerhalb des Suchbereichs
+			// also zum Vorgänger zurück
+			// und dort in Richtung gegen Uhrzeigersinn weitersuchen
+			spr = spru;
+		}
+		else
+		{
+			// Punkt ist innerhalb des Suchbereichs
+
+			if ((akti != spin) || (aktj != spjn))
+			{
+				// Ausgangspunkt wurde noch nicht erreicht
+				// also weitersuchen
+				pfn = std::abs(config->punktfarbe[config->iend * spjn + spin]);
+				if (pfn == 0)
+				{
+					// Punkt ist unbekannt
+					FarbeBestimmen(window, config, spin, spjn, true);
+					pfn = config->punktfarbe[config->iend * spjn + spin];
+					if (pfn == aktf)
+					{
+						// neuer Punkt hat gewünschte Farbe
+						if ((spin < akti) && (spjn == aktj))
+						{
+							// aber liegt vor aktuellem Startpunkt
+							// man ist auf einen schon durchlaufenen Punktsuchpfad gestoßen
+							// also Abbruch
+							spi = akti;
+							spj = aktj;
+						}
+						else
+						{
+							// sonst weiter
+							spi = spin;
+							spj = spjn;
+							spr = sprn;
+						}
+					}
+					else
+					{
+						// neuer Punkt mit anderer Farbe, also ungültiger Punkt
+						// diese Farbe negieren, da durch Punkt noch kein Suchpfad lief
+						config->punktfarbe[config->iend * spjn + spin] = -pfn;
+
+						// also zum Vorgänger zurück und dort in nächster Richtung weitersuchen
+						spr = spru;
+					}
+				}
+				else if (pfn == aktf)
+				{
+					// Punkt ist bekannt und hat gleiche Farbe
+					// man ist irgendwie auf dem Rückweg
+					// bzw. vorhergehende Suche hatte diesen Punkt schon negativ markiert
+					// auf jeden Fall Farbwert positiv setzen
+					config->punktfarbe[config->iend * spjn + spin] = pfn;
+
+					if ((spin < akti) && (spjn == aktj))
+					{
+						// aber liegt vor aktuellem Startpunkt
+						// man ist auf einen schon durchlaufenen Punktsuchpfad gestoßen
+						// also Abbruch
+						spi = akti;
+						spj = aktj;
+					}
+					else
+					{
+						// sonst weiter
+						spi = spin;
+						spj = spjn;
+						spr = sprn;
+					}
+
+					// also von hier weiter
+					//spi = spin;
+					//spj = spjn;
+					//spr = sprn;
+				}
+				else
+				{
+					// Punkt bekannt mit anderer Farbe, also ungültiger Punkt
+					// also zum Vorgänger zurück und dort in nächster Richtung weitersuchen
+					spr = spru;
+				}
+			}
+			else
+			{
+				// Abbruch
+				spi = akti;
+				spj = aktj;
+			}
+		}
+	}
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+sf::Color farbeSetzen(unsigned int& i)
+{
+	if (i == 71) return sf::Color((int)(myT::random(0, 150) + 105), (int)(myT::random(0, 150) + 105), 0);
+	else if (i == 72) return sf::Color((int)(myT::random(0, 150) + 105), 0, (int)(myT::random(0, 150) + 105));
+	//else if (i == 73) return sf::Color(0, (int)(myT::random(0, 150) + 105), (int)(myT::random(0, 150) + 105));
+	else return sf::Color(0, (int)(myT::random(0, 150) + 105), (int)(myT::random(0, 150) + 105));
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 void SeiteBauen(sf::RenderWindow& window, myA::Config* config, int sx, int sy, int sr, int sl, int stz, unsigned int& teilung)
 {
 	int sxa = 0;
@@ -42,10 +273,14 @@ void SeiteBauen(sf::RenderWindow& window, myA::Config* config, int sx, int sy, i
 	if (stz == config->realetiefe)
 	{
 		// Maximaltiefe erreicht, also Kante setzen
-		//->G.setColor(Color.white);
 		sxe = sx - ((sr - 1) % 2) * sl;
 		sye = sy - ((sr - 2) % 2) * sl;
-		//->G.drawLine(sx, sy, sxe, sye);
+		sf::Vertex line1[2];
+		line1[0].position = sf::Vector2f((float)sx, (float)sy);
+		line1[1].position = sf::Vector2f((float)sxe, (float)sye);
+		line1[0].color = sf::Color::White;
+		window.draw(line1, 2, sf::Lines);
+		window.display();
 	}
 	else
 	{
@@ -65,16 +300,24 @@ void SeiteBauen(sf::RenderWindow& window, myA::Config* config, int sx, int sy, i
 		if (config->second == 0)
 		{
 			// die zwei Kantenstücke, die gezeichnet werden
-			//->G.setColor(Color.white);
 			sxe = sx - ((sr - 1) % 2) * sl3;
 			sye = sy - ((sr - 2) % 2) * sl3;
-			//->G.drawLine(sx, sy, sxe, sye);
-			//->G.setColor(Color.white);
+			sf::Vertex line2[2];
+			line2[0].position = sf::Vector2f((float)sx, (float)sy);
+			line2[1].position = sf::Vector2f((float)sxe, (float)sye);
+			line2[0].color = sf::Color::White;
+			window.draw(line2, 2, sf::Lines);
+			window.display();
 			sxa = sx - ((sr - 1) % 2) * (sl3 + sl3m);
 			sya = sy - ((sr - 2) % 2) * (sl3 + sl3m);
 			sxe = sxa - ((sr - 1) % 2) * sl3;
 			sye = sya - ((sr - 2) % 2) * sl3;
-			//->G.drawLine(sxa, sya, sxe, sye);
+			sf::Vertex line3[2];
+			line3[0].position = sf::Vector2f((float)sxa, (float)sya);
+			line3[1].position = sf::Vector2f((float)sxe, (float)sye);
+			line3[0].color = sf::Color::White;
+			window.draw(line3, 2, sf::Lines);
+			window.display();
 		}
 		else
 		{
@@ -120,8 +363,7 @@ void SeiteBauen(sf::RenderWindow& window, myA::Config* config, int sx, int sy, i
 	}
 }
 
-/*
-public void DreiSeiteBauen(sf::RenderWindow& window, Config* config, double sx, double sy, double alpha, double sl, int stz, unsigned int& teilung, double& faktor)
+void DreiSeiteBauen(sf::RenderWindow& window, myA::Config* config, double sx, double sy, double alpha, double sl, int stz, unsigned int& teilung, double& faktor, unsigned int& dfarbe)
 {
 	double sxa = 0;
 	double sya = 0;
@@ -130,13 +372,16 @@ public void DreiSeiteBauen(sf::RenderWindow& window, Config* config, double sx, 
 	double sl3 = 0;
 	double sl3m = 0;
 
-	if (stz == realetiefe)
+	if (stz == config->realetiefe)
 	{
 		// Maximaltiefe erreicht, also Kante setzen
-		////////farbeSetzen(G, dfarbe);
-		sxe = sx + Math.cos(alpha) * sl;
-		sye = sy + Math.sin(alpha) * sl;
-		G.drawLine(dxmitte + (int)sx, dymitte - (int)sy, dxmitte + (int)sxe, dymitte - (int)sye);
+		sxe = sx + std::cos(alpha) * sl;
+		sye = sy + std::sin(alpha) * sl;
+		sf::Vertex line1[2];
+		line1[0].position = sf::Vector2f((float)(config->dxmitte + sx), (float)(config->dymitte - sy));
+		line1[1].position = sf::Vector2f((float)(config->dxmitte + sxe), (float)(config->dymitte - sye));
+		line1[0].color = farbeSetzen(dfarbe);
+		window.draw(line1, 2, sf::Lines);
 	}
 	else
 	{
@@ -153,46 +398,53 @@ public void DreiSeiteBauen(sf::RenderWindow& window, Config* config, double sx, 
 			sl3m -= 2;
 		}
 
-		if ((second % 2) == 0)
+		if ((config->second % 2) == 0)
 		{
 			// zwei Kantenstücke, die gezeichnet werden
-			farbeSetzen(G, dfarbe);
-			sxe = sx + Math.cos(alpha) * sl3;
-			sye = sy + Math.sin(alpha) * sl3;
-			G.drawLine(dxmitte + (int)sx, dymitte - (int)sy, dxmitte + (int)sxe, dymitte - (int)sye);
-			farbeSetzen(G, dfarbe);
-			sxa = sx + Math.cos(alpha) * (sl3 + sl3m);
-			sya = sy + Math.sin(alpha) * (sl3 + sl3m);
-			sxe = sx + Math.cos(alpha) * sl;
-			sye = sy + Math.sin(alpha) * sl;
-			G.drawLine(dxmitte + (int)sxa, dymitte - (int)sya, dxmitte + (int)sxe, dymitte - (int)sye);
+			sxe = sx + std::cos(alpha) * sl3;
+			sye = sy + std::sin(alpha) * sl3;
+			sf::Vertex line2[2];
+			line2[0].position = sf::Vector2f((float)(config->dxmitte + sx), (float)(config->dymitte - sy));
+			line2[1].position = sf::Vector2f((float)(config->dxmitte + sxe), (float)(config->dymitte - sye));
+			line2[0].color = farbeSetzen(dfarbe);
+			window.draw(line2, 2, sf::Lines);
+			sxa = sx + std::cos(alpha) * (sl3 + sl3m);
+			sya = sy + std::sin(alpha) * (sl3 + sl3m);
+			sxe = sx + std::cos(alpha) * sl;
+			sye = sy + std::sin(alpha) * sl;
+			sf::Vertex line3[2];
+			line3[0].position = sf::Vector2f((float)(config->dxmitte + sxa), (float)(config->dymitte - sya));
+			line3[1].position = sf::Vector2f((float)(config->dxmitte + sxe), (float)(config->dymitte - sye));
+			line3[0].color = farbeSetzen(dfarbe);
+			window.draw(line3, 2, sf::Lines);
 		}
 		else
 		{
 			// auch mit Dreieck besetzen
-			DreiSeiteBauen(window, config, sx, sy, alpha, sl3, stz + 1, teilung, faktor);
-			sxa = sx + Math.cos(alpha) * (sl3 + sl3m);
-			sya = sy + Math.sin(alpha) * (sl3 + sl3m);
-			DreiSeiteBauen(window, config, sxa, sya, alpha, sl3, stz + 1, teilung, faktor);
+			DreiSeiteBauen(window, config, sx, sy, alpha, sl3, stz + 1, teilung, faktor, dfarbe);
+			sxa = sx + std::cos(alpha) * (sl3 + sl3m);
+			sya = sy + std::sin(alpha) * (sl3 + sl3m);
+			DreiSeiteBauen(window, config, sxa, sya, alpha, sl3, stz + 1, teilung, faktor, dfarbe);
 		}
 		// zwei neue Dreieckseiten
-		sxa = sx + Math.cos(alpha) * sl3;
-		sya = sy + Math.sin(alpha) * sl3;
+		sxa = sx + std::cos(alpha) * sl3;
+		sya = sy + std::sin(alpha) * sl3;
 
 		// 'acos'-Argument muß im Definitionsbereich bleiben
 		double argument = sl3m / (sl * 2 * faktor);
 		argument = argument < -1 ? -1 : argument;
 		argument = argument > 1 ? 1 : argument;
-		double alphax = Math.acos(argument);
-		double alphaneu = (alpha + alphax) % (2 * Math.PI);
-		DreiSeiteBauen(window, config, sxa, sya, alphaneu, faktor * sl, stz + 1, teilung, faktor);
-		sxa += Math.cos(alphaneu) * faktor * sl;
-		sya += Math.sin(alphaneu) * faktor * sl;
-		alphaneu = (alpha + 2 * Math.PI - alphax) % (2 * Math.PI);
-		DreiSeiteBauen(window, config, sxa, sya, alphaneu, faktor * sl, stz + 1, teilung, faktor);
+		double alphax = std::acos(argument);		
+		//double alphaneu = (alpha + alphax) % (2 * PI);
+		double alphaneu = fmod(alpha + alphax, 2 * PI);
+		DreiSeiteBauen(window, config, sxa, sya, alphaneu, faktor * sl, stz + 1, teilung, faktor, dfarbe);
+		sxa += std::cos(alphaneu) * faktor * sl;
+		sya += std::sin(alphaneu) * faktor * sl;
+		//alphaneu = (alpha + 2 * PI - alphax) % (2 * PI);
+		alphaneu = fmod(alpha + 2 * PI - alphax, 2 * PI);
+		DreiSeiteBauen(window, config, sxa, sya, alphaneu, faktor * sl, stz + 1, teilung, faktor, dfarbe);
 	}
 }
-*/
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -437,10 +689,11 @@ void myA::paint(sf::RenderWindow& window, Config* config)
 		delete[] x;
 		delete[] y;
 	}
-	/*
-	if (config->auswahl == 5)
+	else if (config->auswahl == 5)
 	{
 		// Apfelmännchen
+
+		//window.clear(sf::Color::White);
 
 		// die Funktion lautet 'z^2+c'
 		// wo c den Bereich durchläuft
@@ -448,15 +701,10 @@ void myA::paint(sf::RenderWindow& window, Config* config)
 		config->qrzf = config->rzf * config->rzf;
 		config->qizf = config->izf * config->izf;
 
-		// eigentlich nur im Randmodus nötig
+		// eigentlich nur im Randmodus nötig, das was ich gerade weggelöscht habe
 		// Java-Compiler meckert aber sonst
 		// mal sehen wie es C++ handhabt, wenn ich das wieder verstehe und genauer anschauen kann/muss
-		//punktfarbe = new int[iend + 1][jend + 1];	
-		config->punktfarbe.resize(config->iend + 1);
-		for (auto& row : config->punktfarbe)
-		{
-			row.resize(config->jend + 1);
-		}
+		// und ja fast komplett umschreiben darf
 
 		if (config->neuoderalt == 3)
 		{
@@ -494,12 +742,12 @@ void myA::paint(sf::RenderWindow& window, Config* config)
 				config->cimgrenze = -1.2;
 				config->cipgrenze = 1.2;
 			}
-			config->crstep = (config->crpgrenze - config->crmgrenze) / (config->iend + 1);
+			config->crstep = (config->crpgrenze - config->crmgrenze) / config->iend;
 			config->cistep = (config->cipgrenze - config->cimgrenze) / (config->jend + 1);
 			config->schwarzgrenze = 200;
 
 			// Vorgabefarbe im 'Mittelpunkt'
-			//punktfarbe[250][50] = schwarzgrenze;
+			config->punktfarbe[config->iend * 50 + 250] = config->schwarzgrenze;
 		}
 		else if (config->neuoderalt == 2)
 		{
@@ -519,8 +767,8 @@ void myA::paint(sf::RenderWindow& window, Config* config)
 			intervall = (config->cipgrenze - config->cimgrenze) / config->zoom;
 			config->cimgrenze = innerci - intervall;
 			config->cipgrenze = innerci + intervall;
-			config->crstep = (config->crpgrenze - config->crmgrenze) / (config->iend + 1);
-			config->cistep = (config->cipgrenze - config->cimgrenze) / (config->jend + 1);
+			config->crstep = (config->crpgrenze - config->crmgrenze) / config->iend;
+			config->cistep = (config->cipgrenze - config->cimgrenze) / config->jend;
 
 			config->schwarzgrenze += 2 * config->zoom;
 		}
@@ -543,254 +791,254 @@ void myA::paint(sf::RenderWindow& window, Config* config)
 
 		// ääh farbe taucht nirgends mehr auf?? zumindest hier nicht mehr
 		//farbe = ((int)(rand.nextDouble() * 12345)) % maxfarbe;
-		config->farbe = myT::random(0, 12345 - 1) % config->maxfarbe;
-		// das muss ich noch übersetzen
-		//acolor = new Color[config->schwarzgrenze];
-		//arcolor = new Color[config->schwarzgrenze];
-		//agcolor = new Color[config->schwarzgrenze];
-		//abcolor = new Color[config->schwarzgrenze];
-		//for (int c = 0; c < config->schwarzgrenze; ++c) acolor[c] = new Color((int)(rand.nextDouble() * 256), (int)(rand.nextDouble() * 256), (int)(rand.nextDouble() * 256));
-		//for (int c = 0; c < config->schwarzgrenze; ++c) arcolor[c] = new Color((int)(rand.nextDouble() * 206 + 50), (int)(rand.nextDouble() * 206 + 50), 0);
-		//for (int c = 0; c < config->schwarzgrenze; ++c) agcolor[c] = new Color((int)(rand.nextDouble() * 256), 0, (int)(rand.nextDouble() * 256));
-		//for (int c = 0; c < config->schwarzgrenze; ++c) abcolor[c] = new Color(0, (int)(rand.nextDouble() * 206 + 50), (int)(rand.nextDouble() * 206 + 50));
+		//config->farbe = myT::random(0, 12345 - 1) % config->maxfarbe;
+		// und ich schiebe das auch ins config (auch hier, weil es übersichtlicher wird und keine Extraparameter bei Funktionsaufrufen braucht
+		//std::vector<sf::Color> acolor;
+		//std::vector<sf::Color> arcolor;
+		//std::vector<sf::Color> agcolor;
+		//std::vector<sf::Color> abcolor;
+		for (unsigned int c = 0; c < config->schwarzgrenze; ++c) config->acolor.push_back(sf::Color(myT::random(0, 255), myT::random(0, 255), myT::random(0, 255)));
+		for (unsigned int c = 0; c < config->schwarzgrenze; ++c) config->arcolor.push_back(sf::Color(myT::random(0, 205) + 50, myT::random(0, 205) + 50, 0));
+		for (unsigned int c = 0; c < config->schwarzgrenze; ++c) config->agcolor.push_back(sf::Color(myT::random(0, 255), 0, myT::random(0, 255)));
+		for (unsigned int c = 0; c < config->schwarzgrenze; ++c) config->abcolor.push_back(sf::Color(0, myT::random(0, 205) + 50, myT::random(0, 205) + 50));
 
+		// irgendwann mit der Maussteuerung
 		//->window.setColor(Color.black);
 		//->Font ffont = new Font("Tahoma", Font.PLAIN, 11);
 		//->window.setFont(ffont);
 		// die Koordinaten setzen
 		//->window.drawString("i-Wert", 201, 40);
-	for (unsigned int i = 0; i <= (config->iend + 1) / 50; ++i)
-	{
-		//->std::string s = "   " + (i * 50);
-		//->s = s.substring(s.length() - 4);
-		//->window.drawString(s, 194 + i * 49, 55);
-		//->window.drawString(s, 194 + i * 49, 925);
-	}
-	//->window.drawString("j-Wert", 149, 69);
-	for (unsigned int i = 0; i <= (config->jend + 1) / 50; ++i)
-	{
-		//->std::string s = "  " + (i * 50);
-		//->s = s.substring(s.length() - 3);
-		//->window.drawString(s, 178, 69 + i * 49);
-		//->window.drawString(s, 1356, 69 + i * 49);
-	}
-
-	if (config->modus = 'P')
-	{
-		// Pixelmalerei
-		config->lupe = 0;
-		for (unsigned int j = 0; j <= config->jend; ++j)
+		for (int i = 0; i <= (int)(config->iend / 50); ++i)
 		{
-			for (unsigned int i = 0; i <= config->iend; ++i)
-			{
-				//-<FarbeBestimmen(i, j, g, true);
-			}
+			//->std::string s = "   " + (i * 50);
+			//->s = s.substring(s.length() - 4);
+			//->window.drawString(s, 194 + i * 49, 55);
+			//->window.drawString(s, 194 + i * 49, 925);
 		}
-	}
-	else
-	{
-		// Randabsuchen
-		config->lupe = 0;
-		unsigned int janf = 0;
-		unsigned int ianf = 0;
-		unsigned int i = ianf;
-		unsigned int j = janf;
-		int aktuellefarbe;
-
-		if (config->neuoderalt == 3)
+		//->window.drawString("j-Wert", 149, 69);
+		for (int i = 0; i <= (int)(config->jend / 50); ++i)
 		{
-			// den inneren schwarzen Bereich vorbestimmen
-			// Voraussetzung ist hierfür,
-			// daß der Punkt (575,425) für jeden Exponenten im Schwarzbereich liegt
-			unsigned int ii = 575;
-			unsigned int jj = 425;
-			//->FarbeBestimmen(ii, jj, g, false);
-			while (config->punktfarbe[ii][jj] == config->schwarzgrenze)
-			{
-				// Punkte weder anzeigen noch Farbe wirklich setzen
-				config->punktfarbe[ii][jj] = 0;
-				--ii;
-				//->FarbeBestimmen(ii, jj, g, false);
-			}
-			// linker Randpunkt gefunden
-			// jetzt Rand 'abklappern'
-			//->SuchePunkte(ii + 1, jj, config->schwarzgrenze, g, 0);
+			//->std::string s = "  " + (i * 50);
+			//->s = s.substring(s.length() - 3);
+			//->window.drawString(s, 178, 69 + i * 49);
+			//->window.drawString(s, 1356, 69 + i * 49);
 		}
 
-		// zur Verdeutlichung der möglichen Konstellationen
-		// Grafiken mit folgenden Symbolen
-		// + = gewünschte Farbe
-		// - = unerwünschte Farbe
-		// · = keine Farbe
-
-		while (j <= config->jend)
+		if (config->modus = 'P')
 		{
-			while (i <= config->iend)
+			// Pixelmalerei
+			config->lupe = 0;
+			for (int j = 0; j <= config->jend; ++j)
 			{
-				aktuellefarbe = config->punktfarbe[i][j];
-				if (aktuellefarbe == 0)
+				for (int i = 0; i <= config->iend; ++i)
 				{
-					// hier wird nichts gemalt
-
-					// in diesem Punkt war man noch nicht
-					// ·
-					// also zuerst Farbe des Punktes bestimmen
-					//->FarbeBestimmen(i, j, g, true);
-					aktuellefarbe = config->punktfarbe[i][j];
-
-					// dann das zugehörige Gebiet umkreisen
-
-					// Startrichtung ist Ost,
-					// d.h. von Osten wird jeder Startpunkt anfänglich erreicht
-					// Richtungsabfolge innerhalb Suche ist Ost=0 Süd=1 West=2 Nord=3 Süd...,
-
-					// kommt man von Westen (Richtung Ost)
-					// in einen gültigen Punkt (Punkt gleicher Farbe) wird versucht
-					// in südlicher Richtung von ihm aus weiterzusuchen
-					// kommt man von Norden (Richtung Süd) wird versucht
-					// in westlicher Richtung weiterzusuchen
-					// d.h. die Richtungssuche in gültigen Punkten läuft im Uhrzeigersinn
-
-					// aber kommt man von irgendeiner Richtung X
-					// in einen ungültigen Punkt (Punkt anderer Farbe oder außerhalb Bereichs)
-					// wird vom gültigen Vorgängerpunkt aus in der Richtung weitergesucht,
-					// die gegen den Uhrzeigersinn nach X kommt
-
-					//->SuchePunkte(i, j, aktuellefarbe, g, j);
+					FarbeBestimmen(window, config, i, j, true);
 				}
-				else if (aktuellefarbe < 0)
+			}
+		}
+		else
+		{
+			// Randabsuchen
+			config->lupe = 0;
+			unsigned int janf = 0;
+			unsigned int ianf = 0;
+			int i = ianf;
+			int j = janf;
+			int aktuellefarbe;
+
+			if (config->neuoderalt == 3)
+			{
+				// den inneren schwarzen Bereich vorbestimmen
+				// Voraussetzung ist hierfür,
+				// daß der Punkt (575,425) für jeden Exponenten im Schwarzbereich liegt
+				int ii = 575;
+				int jj = 425;
+				FarbeBestimmen(window, config, ii, jj, false);
+				while (config->punktfarbe[config->iend * jj + ii] == config->schwarzgrenze)
 				{
-					// hier wird nichts gemalt
-
-					// in diesem Punkt war man
-					// +
-					// aber man hat noch nicht von hier aus gesucht
-					// Farbe richtigstellen
-					config->punktfarbe[i][j] = -aktuellefarbe;
-
-					// nun Suche wie oben
-					//->SuchePunkte(i, j, -aktuellefarbe, g, j);
+					// Punkte weder anzeigen noch Farbe wirklich setzen
+					config->punktfarbe[config->iend * jj + ii] = 0;
+					--ii;
+					FarbeBestimmen(window, config, ii, jj, false);
 				}
-				else
+				// linker Randpunkt gefunden
+				// jetzt Rand 'abklappern'
+				SuchePunkte(window, config, ii + 1, jj, config->schwarzgrenze, 0);
+			}
+
+			// zur Verdeutlichung der möglichen Konstellationen
+			// Grafiken mit folgenden Symbolen
+			// + = gewünschte Farbe
+			// - = unerwünschte Farbe
+			// · = keine Farbe
+
+			while (j <= config->jend)
+			{
+				while (i <= config->iend)
 				{
-					// hier wird eventuell gemalt
-
-					// dieser Punkt hat schon eine Farbe
-					// also nachfolgende Punkte testen
-					if (i == config->iend)
+					aktuellefarbe = config->punktfarbe[config->iend * j + i];
+					if (aktuellefarbe == 0)
 					{
-						// Rand erreicht
-						// Wechsel in neue Zeile vorbereiten
-						++i;
+						// hier wird nichts gemalt
+
+						// in diesem Punkt war man noch nicht
+						// ·
+						// also zuerst Farbe des Punktes bestimmen
+						FarbeBestimmen(window, config, i, j, true);
+						aktuellefarbe = config->punktfarbe[config->iend * j + i];
+
+						// dann das zugehörige Gebiet umkreisen
+
+						// Startrichtung ist Ost,
+						// d.h. von Osten wird jeder Startpunkt anfänglich erreicht
+						// Richtungsabfolge innerhalb Suche ist Ost=0 Süd=1 West=2 Nord=3 Süd...,
+
+						// kommt man von Westen (Richtung Ost)
+						// in einen gültigen Punkt (Punkt gleicher Farbe) wird versucht
+						// in südlicher Richtung von ihm aus weiterzusuchen
+						// kommt man von Norden (Richtung Süd) wird versucht
+						// in westlicher Richtung weiterzusuchen
+						// d.h. die Richtungssuche in gültigen Punkten läuft im Uhrzeigersinn
+
+						// aber kommt man von irgendeiner Richtung X
+						// in einen ungültigen Punkt (Punkt anderer Farbe oder außerhalb Bereichs)
+						// wird vom gültigen Vorgängerpunkt aus in der Richtung weitergesucht,
+						// die gegen den Uhrzeigersinn nach X kommt
+
+						SuchePunkte(window, config, i, j, aktuellefarbe, j);
 					}
-					else if (config->punktfarbe[i + 1][j] == 0)
+					else if (aktuellefarbe < 0)
 					{
-						// nächster Punkt hat keine Farbe
-						// +·
-						// also rechten Randpunkt in dieser Farbe suchen
-						unsigned int ii = i;
-						do ++ii;
-						while ((ii < config->iend) && (config->punktfarbe[ii][j] == 0));
-						if (config->punktfarbe[ii][j] == aktuellefarbe)
-						{
-							// Farbrandpunkt gefunden
-							// +··········+
-							// nun testen,
-							// ob Punkt rechts vom linken Randpunkt aber auch diese Farbe hat
-							//->FarbeBestimmen(i + 1, j, g, true);
-							if (config->punktfarbe[i + 1][j] == aktuellefarbe)
-							{
-								// ++·········+
-								// diese Linie kann also auf jeden Fall gezogen werden
+						// hier wird nichts gemalt
 
-								// nun noch testen, ob rechts vom rechten Randpunkt
-								// auch ein gleichfarbiger Punkt sitzt
-								// das wäre dann die Sonderkonstellation
-								// ++·········++······
-								// in dem Fall wird der rechte Randpunkt wieder Startpunkt
-								// im nächsten Durchlauf
+						// in diesem Punkt war man
+						// +
+						// aber man hat noch nicht von hier aus gesucht
+						// Farbe richtigstellen
+						config->punktfarbe[config->iend * j + i] = -aktuellefarbe;
 
-								// Test auf Sonderkonstellation
-								if (ii < config->iend)
-								{
-									// der rechte Randpunkt ist nicht genereller Randpunkt
-
-									bool neuefarbe = false;
-									if (config->punktfarbe[ii + 1][j] == 0)
-									{
-										//->FarbeBestimmen(ii + 1, j, g, true);
-										neuefarbe = true;
-									}
-									// Sonderkonstellation
-									// ++·········++······
-									// eingetreten oder
-									if (config->punktfarbe[ii + 1][j] != aktuellefarbe)
-									{
-										// rechter Randpunkt ist echter Farbrandpunkt
-										// ++·········+-······
-										// Farbe rechts negieren, falls sie noch nicht vorlag
-										if (neuefarbe)
-										{
-											config->punktfarbe[ii + 1][j] = -config->punktfarbe[ii + 1][j];
-										}
-									}
-								}
-
-								//->LinieZiehen(aktuellefarbe, i, ii, j, g);
-								i = ii + 1;
-							}
-							else
-							{
-								// aber nächster Punkt hat eine andere Farbe
-								// +-········+
-								// Farbe rechts negieren
-								config->punktfarbe[i + 1][j] = -config->punktfarbe[i + 1][j];
-								++i;
-							}
-						}
-						else
-						{
-							// Gebiet rechts davon noch nicht erforscht
-							// +·········-
-							// oder
-							// +··········Rand
-							++i;
-						}
-					}
-					else if (config->punktfarbe[i + 1][j] != aktuellefarbe)
-					{
-						// nächster Punkt hat eine andere Farbe
-						// +-
-						++i;
+						// nun Suche wie oben
+						SuchePunkte(window, config, i, j, -aktuellefarbe, j);
 					}
 					else
 					{
-						// nächster Punkt hat gleiche Farbe
-						// ++
-						// also weitermachen
-						// bis zum letzten nächsten Punkt mit gleicher Farbe
-						++i;
+						// hier wird eventuell gemalt
+
+						// dieser Punkt hat schon eine Farbe
+						// also nachfolgende Punkte testen
+						if (i == config->iend)
+						{
+							// Rand erreicht
+							// Wechsel in neue Zeile vorbereiten
+							++i;
+						}
+						else if (config->punktfarbe[config->iend * j + i + 1] == 0)
+						{
+							// nächster Punkt hat keine Farbe
+							// +·
+							// also rechten Randpunkt in dieser Farbe suchen
+							int ii = i;
+							do ++ii;
+							while ((ii < config->iend) && (config->punktfarbe[config->iend * j + ii] == 0));
+							if (config->punktfarbe[config->iend * j + ii] == aktuellefarbe)
+							{
+								// Farbrandpunkt gefunden
+								// +··········+
+								// nun testen,
+								// ob Punkt rechts vom linken Randpunkt aber auch diese Farbe hat
+								FarbeBestimmen(window, config, i + 1, j, true);
+								if (config->punktfarbe[config->iend * j + i + 1] == aktuellefarbe)
+								{
+									// ++·········+
+									// diese Linie kann also auf jeden Fall gezogen werden
+
+									// nun noch testen, ob rechts vom rechten Randpunkt
+									// auch ein gleichfarbiger Punkt sitzt
+									// das wäre dann die Sonderkonstellation
+									// ++·········++······
+									// in dem Fall wird der rechte Randpunkt wieder Startpunkt
+									// im nächsten Durchlauf
+
+									// Test auf Sonderkonstellation
+									if (ii < config->iend)
+									{
+										// der rechte Randpunkt ist nicht genereller Randpunkt
+
+										bool neuefarbe = false;
+										if (config->punktfarbe[config->iend * j + ii + 1] == 0)
+										{
+											FarbeBestimmen(window, config, ii + 1, j, true);
+											neuefarbe = true;
+										}
+										// Sonderkonstellation
+										// ++·········++······
+										// eingetreten oder
+										if (config->punktfarbe[config->iend * j + ii + 1] != aktuellefarbe)
+										{
+											// rechter Randpunkt ist echter Farbrandpunkt
+											// ++·········+-······
+											// Farbe rechts negieren, falls sie noch nicht vorlag
+											if (neuefarbe)
+											{
+												config->punktfarbe[config->iend * j + ii + 1] = -config->punktfarbe[config->iend * j + ii + 1];
+											}
+										}
+									}
+
+									LinieZiehen(window, config, aktuellefarbe, i, ii, j);
+									i = ii + 1;
+								}
+								else
+								{
+									// aber nächster Punkt hat eine andere Farbe
+									// +-········+
+									// Farbe rechts negieren
+									config->punktfarbe[config->iend * j + i + 1] = -config->punktfarbe[config->iend * j + i + 1];
+									++i;
+								}
+							}
+							else
+							{
+								// Gebiet rechts davon noch nicht erforscht
+								// +·········-
+								// oder
+								// +··········Rand
+								++i;
+							}
+						}
+						else if (config->punktfarbe[config->iend * j + i + 1] != aktuellefarbe)
+						{
+							// nächster Punkt hat eine andere Farbe
+							// +-
+							++i;
+						}
+						else
+						{
+							// nächster Punkt hat gleiche Farbe
+							// ++
+							// also weitermachen
+							// bis zum letzten nächsten Punkt mit gleicher Farbe
+							++i;
+						}
 					}
 				}
+				i = ianf;
+				++j;
 			}
-			i = ianf;
-			++j;
 		}
+
+		//->textfield[config->vonkomponente[5] + 3].setText("" + config->ineu);
+		//->textfield[config->vonkomponente[5] + 4].setText("" + config->jneu);
+
+		config->modus = 'R';
+		//->textfield[config->vonkomponente[5] + 6].setText(modus);
+
 	}
-
-	//->textfield[config->vonkomponente[5] + 3].setText("" + config->ineu);
-	//->textfield[config->vonkomponente[5] + 4].setText("" + config->jneu);
-
-	config->modus = 'R';
-	//->textfield[config->vonkomponente[5] + 6].setText(modus);
-
-	}
-	*/
 	else if (config->auswahl == 6)
 	{
 		// Schneeflocke
-		int xmitte = 400;
-		int ymitte = 270;
+		int xmitte = 850;
+		int ymitte = 450;
 		int tiefenzaehler = 0;
 
 		if (config->second == 0)
@@ -807,25 +1055,30 @@ void myA::paint(sf::RenderWindow& window, Config* config)
 		int halbkante = config->schneekante / 2;
 		halbkante = (int)(3 * halbkante / teilung);
 
+		// das lasse ich erst mal
+		//std::vector<sf::Vertex> lines;
+
 		// Parameter sind
+		// das Window
+		// die Konfiguration
+		//// der Vektor der Vertexe
 		// Startpunkt x und y
 		// die Richtung (0, 1, 2 oder 3 für ost, süd, west oder nord)
 		// die Länge der Seite
 		// die Rechentiefe
-		// das Grafikobjekt
 		// die Teilung
-		// Richtung
+		
+		// in Richtung
 		SeiteBauen(window, config, xmitte - halbkante, ymitte - halbkante, 0, 2 * halbkante, tiefenzaehler, teilung);
 		SeiteBauen(window, config, xmitte + halbkante, ymitte - halbkante, 1, 2 * halbkante, tiefenzaehler, teilung);
 		SeiteBauen(window, config, xmitte + halbkante, ymitte + halbkante, 2, 2 * halbkante, tiefenzaehler, teilung);
 		SeiteBauen(window, config, xmitte - halbkante, ymitte + halbkante, 3, 2 * halbkante, tiefenzaehler, teilung);
-		// Gegenrichtung
+		// in Gegenrichtung
 		SeiteBauen(window, config, xmitte + halbkante, ymitte - halbkante, 2, 2 * halbkante, tiefenzaehler, teilung);
 		SeiteBauen(window, config, xmitte + halbkante, ymitte + halbkante, 3, 2 * halbkante, tiefenzaehler, teilung);
 		SeiteBauen(window, config, xmitte - halbkante, ymitte + halbkante, 0, 2 * halbkante, tiefenzaehler, teilung);
 		SeiteBauen(window, config, xmitte - halbkante, ymitte - halbkante, 1, 2 * halbkante, tiefenzaehler, teilung);
 	}
-	/*
 	else if (config->auswahl == 7)
 	{
 		if (config->second == 0) config->realetiefe = config->dreitiefe;
@@ -839,13 +1092,14 @@ void myA::paint(sf::RenderWindow& window, Config* config)
 
 		// und die Malgrundfarbe
 		unsigned int dfarbe;
-		unsigned int rr = myT::random(0, 2);
-		dfarbe = rr == 1 ? 12 : 11;
-		dfarbe = rr == 2 ? 13 : dfarbe;
+		unsigned int rr = myT::random(0, 3);
+		dfarbe = rr == 1 ? 72 : 71;
+		dfarbe = rr == 2 ? 73 : dfarbe;
 
 		// die Seitenlänge der aufgesetzten Dreiecke
 		double faktor;
-		do faktor = rand(); while ((faktor < 0.4) || (faktor > 0.8));
+		//do faktor = 1. * rand() / RAND_MAX; while ((faktor < 0.4) || (faktor > 0.8));
+		do faktor = 1. * rand() / RAND_MAX; while ((faktor < 0.4) || (faktor > 0.6));
 
 		// Parameter sind
 		// Startpunkt x und y
@@ -855,17 +1109,32 @@ void myA::paint(sf::RenderWindow& window, Config* config)
 		// die Teilung
 		// die Färbung
 		double idkante = config->dreikante / std::sqrt(3);
-		DreiSeiteBauen(Math.cos(7 * Math.PI / 6.0) * idkante, Math.sin(7 * Math.PI / 6.0) * idkante, Math.PI / 3.0, config->dreikante, tiefenzaehler, teilung, faktor);
-		DreiSeiteBauen(Math.cos(Math.PI / 2.0) * idkante, Math.sin(Math.PI / 2.0) * idkante, 5 * Math.PI / 3.0, config->dreikante, tiefenzaehler, teilung, faktor);
-		DreiSeiteBauen(Math.cos(11 * Math.PI / 6.0) * idkante, Math.sin(11 * Math.PI / 6.0) * idkante, Math.PI, config->dreikante, tiefenzaehler, teilung, faktor);
+		DreiSeiteBauen(window, config, std::cos(7 * PI / 6.0) * idkante, std::sin(7 * PI / 6.0) * idkante, PI / 3.0, config->dreikante, tiefenzaehler, teilung, faktor, dfarbe);
+		DreiSeiteBauen(window, config, std::cos(PI / 2.0) * idkante, std::sin(PI / 2.0) * idkante, 5 * PI / 3.0, config->dreikante, tiefenzaehler, teilung, faktor, dfarbe);
+		DreiSeiteBauen(window, config, std::cos(11 * PI / 6.0) * idkante, std::sin(11 * PI / 6.0) * idkante, PI, config->dreikante, tiefenzaehler, teilung, faktor, dfarbe);
 		if (config->second >= 2)
 		{
 			// Gegenrichtung
-			DreiSeiteBauen(Math.cos(7 * Math.PI / 6.0) * idkante, Math.sin(7 * Math.PI / 6.0) * idkante, 0, config->dreikante, tiefenzaehler, teilung, faktor);
-			DreiSeiteBauen(Math.cos(Math.PI / 2.0) * idkante, Math.sin(Math.PI / 2.0) * idkante, 4 * Math.PI / 3.0, config->dreikante, tiefenzaehler, teilung, faktor);
-			DreiSeiteBauen(Math.cos(11 * Math.PI / 6.0) * idkante, Math.sin(11 * Math.PI / 6.0) * idkante, 2 * Math.PI / 3.0, config->dreikante, tiefenzaehler, teilung, faktor);
+			DreiSeiteBauen(window, config, std::cos(7 * PI / 6.0) * idkante, std::sin(7 * PI / 6.0) * idkante, 0, config->dreikante, tiefenzaehler, teilung, faktor, dfarbe);
+			DreiSeiteBauen(window, config, std::cos(PI / 2.0) * idkante, std::sin(PI / 2.0) * idkante, 4 * PI / 3.0, config->dreikante, tiefenzaehler, teilung, faktor, dfarbe);
+			DreiSeiteBauen(window, config, std::cos(11 * PI / 6.0) * idkante, std::sin(11 * PI / 6.0) * idkante, 2 * PI / 3.0, config->dreikante, tiefenzaehler, teilung, faktor, dfarbe);
 		}
 	}
-	*/
 
 }
+
+/*
+ 	public void farbeSetzen(Graphics G,int i)
+	{
+		// Hintergrund-, Vordergrund- und Farbe an sich setzen
+		int rAnteil = (int)(rand.nextDouble()*200+55);
+		int gAnteil = (int)(rand.nextDouble()*200+55);
+		int bAnteil = (int)(rand.nextDouble()*200+55);
+		if(i == 0) setBackground(new Color(rAnteil,gAnteil,bAnteil));
+		else if(i == 1) setForeground(new Color((int)(rAnteil/10),(int)(gAnteil/10),(int)(bAnteil/10)));
+		else if(i == 2) G.setColor(new Color(rAnteil,gAnteil,bAnteil));
+		else if(i == 11) G.setColor(new Color((int)(rand.nextDouble()*150+105),(int)(rand.nextDouble()*150+105),0));
+		else if(i == 12) G.setColor(new Color((int)(rand.nextDouble()*150+105),0,(int)(rand.nextDouble()*150+105)));
+		else if(i == 13) G.setColor(new Color(0,(int)(rand.nextDouble()*150+105),(int)(rand.nextDouble()*150+105)));
+	}
+*/
